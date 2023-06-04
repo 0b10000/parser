@@ -1,5 +1,5 @@
 use crate::demo::data::DemoTick;
-use crate::demo::gameevent_gen::{ObjectDestroyedEvent, PlayerDeathEvent};
+use crate::demo::gameevent_gen::{ObjectDestroyedEvent, PlayerDeathEvent, PlayerHurtEvent};
 use crate::demo::gamevent::GameEvent;
 use crate::demo::message::gameevent::GameEventMessage;
 use crate::demo::message::packetentities::{EntityId, PacketEntity, UpdateType};
@@ -21,9 +21,8 @@ use std::str::FromStr;
 
 pub struct CachedEntities {}
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum PlayerState {
-    #[default]
     Alive = 0,
     Dying = 1,
     Death = 2,
@@ -38,6 +37,12 @@ impl PlayerState {
             3 => PlayerState::Respawnable,
             _ => PlayerState::Alive,
         }
+    }
+}
+
+impl Default for PlayerState {
+    fn default() -> Self {
+        PlayerState::Alive
     }
 }
 
@@ -250,6 +255,42 @@ impl Kill {
     }
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone)]
+
+pub struct Hurt {
+    tick: DemoTick,
+    user_id: u16,
+    health: u16,
+    attacker_id: u16,
+    damage_amount: u16,
+    custom: u16,
+    show_disguised_crit: bool,
+    crit: bool,
+    mini_crit: bool,
+    all_see_crit: bool,
+    weapon_id: u16,
+    bonus_effect: u8,
+}
+
+impl Hurt {
+    fn new(tick: DemoTick, hurt: &PlayerHurtEvent) -> Self {
+        Hurt {
+            tick,
+            user_id: hurt.user_id,
+            health: hurt.health,
+            attacker_id: hurt.attacker,
+            damage_amount: hurt.damage_amount,
+            custom: hurt.custom,
+            show_disguised_crit: hurt.show_disguised_crit,
+            crit: hurt.crit,
+            mini_crit: hurt.mini_crit,
+            all_see_crit: hurt.all_see_crit,
+            weapon_id: hurt.weapon_id,
+            bonus_effect: hurt.bonus_effect,
+        }
+    }
+}
+
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GameState {
     pub players: Vec<Player>,
@@ -257,6 +298,7 @@ pub struct GameState {
     pub world: Option<World>,
     pub kills: Vec<Kill>,
     pub tick: DemoTick,
+    pub hurts: Vec<Hurt>,
 }
 
 impl GameState {
@@ -332,6 +374,9 @@ impl MessageHandler for GameStateAnalyser {
                 }
                 GameEvent::ObjectDestroyed(ObjectDestroyedEvent { index, .. }) => {
                     self.state.remove_building((*index as u32).into());
+                }
+                GameEvent::PlayerHurt(hurt) => {
+                    self.state.hurts.push(Hurt::new(self.tick, hurt))
                 }
                 _ => {}
             },
@@ -473,6 +518,7 @@ impl GameStateAnalyser {
         const NON_LOCAL_PITCH_ANGLES: SendPropIdentifier =
             SendPropIdentifier::new("DT_TFNonLocalPlayerExclusive", "m_angEyeAngles[0]");
 
+
         for prop in entity.props(parser_state) {
             match prop.identifier {
                 HEALTH_PROP => {
@@ -549,26 +595,31 @@ impl GameStateAnalyser {
             .state
             .get_or_create_building(entity.entity_index, BuildingClass::Sentry);
 
-        if let Building::Sentry(sentry) = building {
-            for prop in entity.props(parser_state) {
-                match prop.identifier {
-                    ANGLE => sentry.angle = f32::try_from(&prop.value).unwrap_or_default(),
-                    MINI => sentry.is_mini = i64::try_from(&prop.value).unwrap_or_default() > 0,
-                    CONTROLLED => {
-                        sentry.player_controlled =
-                            i64::try_from(&prop.value).unwrap_or_default() > 0
+        match building {
+            Building::Sentry(sentry) => {
+                for prop in entity.props(parser_state) {
+                    match prop.identifier {
+                        ANGLE => sentry.angle = f32::try_from(&prop.value).unwrap_or_default(),
+                        MINI => sentry.is_mini = i64::try_from(&prop.value).unwrap_or_default() > 0,
+                        CONTROLLED => {
+                            sentry.player_controlled =
+                                i64::try_from(&prop.value).unwrap_or_default() > 0
+                        }
+                        TARGET => {
+                            sentry.auto_aim_target =
+                                UserId::from(i64::try_from(&prop.value).unwrap_or_default() as u16)
+                        }
+                        SHELLS => {
+                            sentry.shells = i64::try_from(&prop.value).unwrap_or_default() as u16
+                        }
+                        ROCKETS => {
+                            sentry.rockets = i64::try_from(&prop.value).unwrap_or_default() as u16
+                        }
+                        _ => {}
                     }
-                    TARGET => {
-                        sentry.auto_aim_target =
-                            UserId::from(i64::try_from(&prop.value).unwrap_or_default() as u16)
-                    }
-                    SHELLS => sentry.shells = i64::try_from(&prop.value).unwrap_or_default() as u16,
-                    ROCKETS => {
-                        sentry.rockets = i64::try_from(&prop.value).unwrap_or_default() as u16
-                    }
-                    _ => {}
                 }
             }
+            _ => {}
         }
     }
 
@@ -597,33 +648,39 @@ impl GameStateAnalyser {
             .state
             .get_or_create_building(entity.entity_index, BuildingClass::Teleporter);
 
-        if let Building::Teleporter(teleporter) = building {
-            for prop in entity.props(parser_state) {
-                match prop.identifier {
-                    RECHARGE_TIME => {
-                        teleporter.recharge_time = f32::try_from(&prop.value).unwrap_or_default()
+        match building {
+            Building::Teleporter(teleporter) => {
+                for prop in entity.props(parser_state) {
+                    match prop.identifier {
+                        RECHARGE_TIME => {
+                            teleporter.recharge_time =
+                                f32::try_from(&prop.value).unwrap_or_default()
+                        }
+                        RECHARGE_DURATION => {
+                            teleporter.recharge_duration =
+                                f32::try_from(&prop.value).unwrap_or_default()
+                        }
+                        TIMES_USED => {
+                            teleporter.times_used =
+                                i64::try_from(&prop.value).unwrap_or_default() as u16
+                        }
+                        OTHER_END => {
+                            teleporter.other_end = EntityId::from(
+                                i64::try_from(&prop.value).unwrap_or_default() as u32,
+                            )
+                        }
+                        YAW_TO_EXIT => {
+                            teleporter.yaw_to_exit = f32::try_from(&prop.value).unwrap_or_default()
+                        }
+                        IS_ENTRANCE => {
+                            teleporter.is_entrance =
+                                i64::try_from(&prop.value).unwrap_or_default() == 0
+                        }
+                        _ => {}
                     }
-                    RECHARGE_DURATION => {
-                        teleporter.recharge_duration =
-                            f32::try_from(&prop.value).unwrap_or_default()
-                    }
-                    TIMES_USED => {
-                        teleporter.times_used =
-                            i64::try_from(&prop.value).unwrap_or_default() as u16
-                    }
-                    OTHER_END => {
-                        teleporter.other_end =
-                            EntityId::from(i64::try_from(&prop.value).unwrap_or_default() as u32)
-                    }
-                    YAW_TO_EXIT => {
-                        teleporter.yaw_to_exit = f32::try_from(&prop.value).unwrap_or_default()
-                    }
-                    IS_ENTRANCE => {
-                        teleporter.is_entrance = i64::try_from(&prop.value).unwrap_or_default() == 0
-                    }
-                    _ => {}
                 }
             }
+            _ => {}
         }
     }
 
@@ -644,24 +701,31 @@ impl GameStateAnalyser {
             .state
             .get_or_create_building(entity.entity_index, BuildingClass::Dispenser);
 
-        if let Building::Dispenser(dispenser) = building {
-            for prop in entity.props(parser_state) {
-                match prop.identifier {
-                    AMMO => dispenser.metal = i64::try_from(&prop.value).unwrap_or_default() as u16,
-                    HEALING => {
-                        let values = match &prop.value {
-                            SendPropValue::Array(vec) => vec.as_slice(),
-                            _ => Default::default(),
-                        };
+        match building {
+            Building::Dispenser(dispenser) => {
+                for prop in entity.props(parser_state) {
+                    match prop.identifier {
+                        AMMO => {
+                            dispenser.metal = i64::try_from(&prop.value).unwrap_or_default() as u16
+                        }
+                        HEALING => {
+                            let values = match &prop.value {
+                                SendPropValue::Array(vec) => vec.as_slice(),
+                                _ => Default::default(),
+                            };
 
-                        dispenser.healing = values
-                            .iter()
-                            .map(|val| UserId::from(i64::try_from(val).unwrap_or_default() as u16))
-                            .collect()
+                            dispenser.healing = values
+                                .iter()
+                                .map(|val| {
+                                    UserId::from(i64::try_from(val).unwrap_or_default() as u16)
+                                })
+                                .collect()
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
+            _ => {}
         }
     }
 

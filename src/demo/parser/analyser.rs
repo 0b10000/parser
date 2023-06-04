@@ -41,13 +41,10 @@ impl ChatMessage {
     }
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq, Hash, TryFromPrimitive, Default,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq, Hash, TryFromPrimitive)]
 #[serde(rename_all = "lowercase")]
 #[repr(u8)]
 pub enum Team {
-    #[default]
     Other = 0,
     Spectator = 1,
     Red = 2,
@@ -67,14 +64,19 @@ impl Team {
     }
 }
 
+impl Default for Team {
+    fn default() -> Self {
+        Team::Other
+    }
+}
+
 #[derive(
-    Debug, Clone, Serialize, Copy, PartialEq, Eq, Hash, TryFromPrimitive, Display, FromStr, Default,
+    Debug, Clone, Serialize, Copy, PartialEq, Eq, Hash, TryFromPrimitive, Display, FromStr,
 )]
 #[display(style = "lowercase")]
 #[serde(rename_all = "lowercase")]
 #[repr(u8)]
 pub enum Class {
-    #[default]
     Other = 0,
     Scout = 1,
     Sniper = 2,
@@ -124,6 +126,12 @@ impl Class {
         u8: TryFrom<U>,
     {
         Class::try_from(u8::try_from(number).unwrap_or_default()).unwrap_or_default()
+    }
+}
+
+impl Default for Class {
+    fn default() -> Self {
+        Class::Other
     }
 }
 
@@ -468,7 +476,7 @@ impl Analyser {
         {
             self.state
                 .users
-                .entry(user_info.player_info.user_id)
+                .entry(user_info.player_info.user_id.into())
                 .and_modify(|info| {
                     info.entity_id = user_info.entity_id;
                 })

@@ -32,7 +32,7 @@ was being recorded.  The player who created the demo will be highlighted in the 
 use bitbuffer::BitRead;
 use main_error::MainError;
 use std::fs;
-use tf_demo_parser::demo::header::Header;
+use tf_demo_parser::demo::_header::Header;
 use tf_demo_parser::demo::parser::{DemoHandler, RawPacketStream};
 use tf_demo_parser::Demo;
 
@@ -43,8 +43,8 @@ fn main() -> Result<(), MainError> {
     let mut handler = DemoHandler::default();
 
     let mut stream = demo.get_stream();
-    let header = Header::read(&mut stream)?;
-    handler.handle_header(&header);
+    let _header = Header::read(&mut stream)?;
+    handler.handle_header(&_header);
 
     let mut packets = RawPacketStream::new(stream);
 
@@ -66,5 +66,5 @@ Once you have a custom analyser you can use it with:
 
 ```rust
 DemoParser::new_all_with_analyser(demo.get_stream(), CustomAnalyser::new());
-let (header, state) = parser.parse()?;
+let (_header, state) = parser.parse()?;
 ```
