@@ -258,18 +258,18 @@ impl Kill {
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone)]
 
 pub struct Hurt {
-    tick: DemoTick,
-    user_id: u16,
-    health: u16,
-    attacker_id: u16,
-    damage_amount: u16,
-    custom: u16,
-    show_disguised_crit: bool,
-    crit: bool,
-    mini_crit: bool,
-    all_see_crit: bool,
-    weapon_id: u16,
-    bonus_effect: u8,
+    pub tick: DemoTick,
+    pub user_id: u16,
+    pub health: u16,
+    pub attacker_id: u16,
+    pub damage_amount: u16,
+    pub custom: u16,
+    pub show_disguised_crit: bool,
+    pub crit: bool,
+    pub mini_crit: bool,
+    pub all_see_crit: bool,
+    pub weapon_id: u16,
+    pub bonus_effect: u8,
 }
 
 impl Hurt {
