@@ -255,8 +255,7 @@ impl Kill {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone)]
-
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub struct Hurt {
     pub tick: DemoTick,
     pub user_id: u16,
